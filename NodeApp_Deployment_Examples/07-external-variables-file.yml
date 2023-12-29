@@ -1,0 +1,48 @@
+---
+- name: Install node and npm
+  become: yes
+  hosts: node-app
+  tasks:
+    - name: update apt repo and cache
+      apt: update_cache=yes force_apt_get=yes upgrade=yes cache_valid_time=3600
+    - name: Install nodejs and npm
+      apt:
+        pkg:
+          - nodejs
+          - npm
+- name: Create new linux user for node app
+  become: yes
+  hosts: node-app
+  vars_files:
+    - project-vars
+  tasks:
+    - name: create linux user
+      user:
+        name: "{{linux_username}}"
+        comment: "{{linux_username}} Admin"
+        group: admin
+- name: Deploying nodejs application
+  hosts: node-app
+  become: true
+  become_user: "{{linux_username}}"
+  vars_files:
+    - project-vars
+  tasks:
+    - name: unpack nodejs tar file
+      unarchive:
+        src: "{{location}}/docker_web_app-{{version}}.tgz"
+        dest: /home/{{linux_username}}
+    - name: Install node dependencies
+      npm:
+        path: /home/{{linux_username}}/package/
+    - name: Start the application
+      command:
+        chdir: /home/{{linux_username}}/package/
+        cmd: node server.js
+      async: 1000
+      poll: 0
+    - name: Ensure app is running
+      shell: ps aux | grep node
+      register: app_status
+    - debug: msg={{app_status.stdout_lines}}
+
